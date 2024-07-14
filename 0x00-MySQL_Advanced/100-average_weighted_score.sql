@@ -10,3 +10,6 @@ BEGIN
 			   ON corrections.project_id = projects.id
                            WHERE corrections.user_id=user_id)
 	WHERE users.id=user_id;
+END
+$$
+DELIMITER ;
