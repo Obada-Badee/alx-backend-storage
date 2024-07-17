@@ -42,6 +42,6 @@ if __name__ == "__main__":
             "$limit": 10
         }
     ])
-    print("Ips:")
+    print("IPs:")
     for ip in ips:
         print(f"\t{ip['_id']}: {ip['count']}")
