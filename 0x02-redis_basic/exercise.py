@@ -1,47 +1,117 @@
 #!/usr/bin/env python3
-""" Redis Class Module """
-
-
+"""
+This Module declares a redis class and methods
+"""
 import redis
-from typing import Union, Callable, TypeVar
-import uuid
+from uuid import uuid4
+from typing import Union, Callable, Optional
+from functools import wraps
 
 
-T = TypeVar('T', int, float, bytes, str)
+def count_calls(method: Callable) -> Callable:
+    """
+    count how many times methods of Cache class are called
+    """
+    key = method.__qualname__
+
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        """
+        wrap the decorated function and return the wrapper
+        """
+        self._redis.incr(key)
+        return method(self, *args, **kwargs)
+    return wrapper
+
+
+def call_history(method: Callable) -> Callable:
+    """
+    store the history of inputs and outputs for a particular function
+    """
+    @wraps(method)
+    def wrapper(self, *args, **kwargs):
+        """
+        wrap the decorated function and return the wrapper
+        """
+        input = str(args)
+        self._redis.rpush(method.__qualname__ + ":inputs", input)
+        output = str(method(self, *args, **kwargs))
+        self._redis.rpush(method.__qualname__ + ":outputs", output)
+        return output
+    return wrapper
+
+
+def replay(fn: Callable):
+    """
+    display the history of calls of a particular function
+    """
+    r = redis.Redis()
+    func_name = fn.__qualname__
+    c = r.get(func_name)
+    try:
+        c = int(c.decode("utf-8"))
+    except Exception:
+        c = 0
+    print("{} was called {} times:".format(func_name, c))
+    inputs = r.lrange("{}:inputs".format(func_name), 0, -1)
+    outputs = r.lrange("{}:outputs".format(func_name), 0, -1)
+    for inp, outp in zip(inputs, outputs):
+        try:
+            inp = inp.decode("utf-8")
+        except Exception:
+            inp = ""
+        try:
+            outp = outp.decode("utf-8")
+        except Exception:
+            outp = ""
+        print("{}(*{}) -> {}".format(func_name, inp, outp))
 
 
 class Cache:
-    """ Class that specify the cache opertion """
-
-    def __init__(self) -> None:
-        """Initilize the redis """
-
-        self._redis = redis.Redis()
+    """
+    a class that declares a Cache redis class
+    """
+    def __init__(self):
+        """
+        upon init to store an instance and flush
+        """
+        self._redis = redis.Redis(host='localhost', port=6379, db=0)
         self._redis.flushdb()
 
-    def store(self, data: T) -> str:
-        """generate a random key store the input data in Redis"""
+    @call_history
+    @count_calls
+    def store(self, data: Union[str, bytes, int, float]) -> str:
+        """
+        it takes a data argument and returns a string
+        """
+        rkey = str(uuid4())
+        self._redis.set(rkey, data)
+        return rkey
 
-        _id = str(uuid.uuid4())
-        self._redis.set(_id, data)
-        return _id
-
-    def get(self, key: str, fn: Callable = None) -> T:
-        """ Reading from Redis and recovering original type """
-
-        _value = self._redis.get(key)
+    def get(self, key: str,
+            fn: Optional[Callable] = None) -> Union[str, bytes, int, float]:
+        """
+        it converts the data back to the desired format
+        """
+        value = self._redis.get(key)
         if fn:
-            _value = fn(_value)
-        return _value
+            value = fn(value)
+        return value
 
-    def get_str(self, key: str) -> Union[str, None]:
-        """ automatically parametrize Cache.get with str """
-
-        _value = self._redis.get(key, str).decode("utf-8")
-        return _value
+    def get_str(self, key: str) -> str:
+        """
+        the parametrize Cache.get with correct conversion function
+        """
+        value = self._redis.get(key)
+        return value.decode("utf-8")
 
     def get_int(self, key: str) -> int:
-        """ automatically parametrize Cache.get with int """
-
-        _value = self._redis.get(key, int)
-        return _value
+        """
+        the parametrize Cache.get with correct conversion function
+        """
+        value = self._redis.get(key)
+        try:
+            value = int(value.decode("utf-8"))
+        except Exception:
+            value = 0
+        return value
