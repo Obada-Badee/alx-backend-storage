@@ -35,9 +35,9 @@ class Cache:
             return None
         else:
             if fn:
-                _vlaue = fn(_vlaue)
+                _value = fn(_value)
 
-        return _vlaue
+        return _value
 
     def get_str(self, key: str) -> Union[str, None]:
         """ automatically parametrize Cache.get with str """
@@ -46,7 +46,7 @@ class Cache:
         if not _value:
             return None
         else:
-            return lambda _vlaue: _vlaue.decode("utf-8")
+            return lambda _value: _value.decode("utf-8")
 
     def get_int(self, key: str) -> Union[int, None]:
         """ automatically parametrize Cache.get with int """
